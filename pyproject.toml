@@ -1,0 +1,15 @@
+[project]
+name = "psych-llm-study"
+version = "0.1.0"
+description = "Psychology research study using LLMs with tracked reasoning"
+requires-python = ">=3.13"
+dependencies = [
+    "llm-client",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+llm-client = { path = "../llm-client", editable = true }

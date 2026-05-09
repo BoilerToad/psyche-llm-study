@@ -1,0 +1,8 @@
+# Python dependencies for psych_llm_study
+# 
+# Install with: pip install -r requirements.txt
+#
+# Note: This assumes llm-client is available at ../llm-client/
+# For full setup, use ./setup.sh instead
+
+-e ../llm-client

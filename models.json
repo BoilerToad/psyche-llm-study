@@ -1,0 +1,10 @@
+{
+  "models": [
+    "grok-4.20-0309-reasoning",
+    "deepseek-v4-pro:cloud",
+    "gemma4:26b-cloud",
+    "qwen3:14b"
+  ],
+  "probe_models_path": "/Users/toddfirsich/AI-Development/llm-model-update/probes/probe_models.json",
+  "notes": "All models must exist in probe_models.json. Reasoning models will populate think_block field."
+}

@@ -32,5 +32,8 @@ logs/
 *.jsonl
 *.log
 
+# Experiments — personal research data
+experiments/
+
 # Environment
 .env

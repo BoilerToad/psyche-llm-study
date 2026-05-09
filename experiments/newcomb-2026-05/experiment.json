@@ -1,0 +1,13 @@
+{
+  "experiment_id": "newcomb-2026-05",
+  "name": "Newcomb's Paradox",
+  "description": "Two-question probe on Newcomb's paradox: initial choice and adversarial reconsideration",
+  "version": "1.0",
+  "created_at": "2026-05-09",
+  "questions_file": "exp_questions.json",
+  "models_file": "exp_models.json",
+  "run_config": {
+    "timeout": 240,
+    "temperature": 0.7
+  }
+}

@@ -7,7 +7,9 @@ Feed collected model responses to a judge LLM for analysis.
 For each question, builds a prompt containing all model responses and asks
 the judge to summarize patterns, highlight notable findings, and flag outliers.
 
-Output: experiments/<id>/analysis/judge_TIMESTAMP.md
+Output:
+  experiments/<id>/analysis/judge_TIMESTAMP.md   — human-readable report
+  experiments/<id>/analysis/judge_TIMESTAMP.db   — queryable SQLite archive
 
 Usage:
     python scripts/judge_responses.py --experiment pilot-2026-05
@@ -44,6 +46,76 @@ Provide a structured analysis covering:
 5. **Overall assessment** — quality and depth across the model set
 """
 
+
+# ── SQLite helpers ────────────────────────────────────────────────────────────
+
+def init_judge_db(db_path):
+    """Create the judge DB schema and return (conn, run_id placeholder)."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS judge_runs (
+            id          INTEGER PRIMARY KEY,
+            experiment_id TEXT NOT NULL,
+            source_db   TEXT NOT NULL,
+            judge_model TEXT NOT NULL,
+            created_at  TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS judge_analyses (
+            id               INTEGER PRIMARY KEY,
+            run_id           INTEGER NOT NULL,
+            question_id      TEXT NOT NULL,
+            category         TEXT,
+            question_prompt  TEXT,
+            models_included  INTEGER,
+            models_skipped   TEXT,
+            judge_response   TEXT,
+            elapsed_seconds  REAL,
+            success          INTEGER NOT NULL,
+            created_at       TEXT NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES judge_runs(id)
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+def insert_run(conn, experiment_id, source_db, judge_model):
+    """Insert a judge_runs row and return its id."""
+    cursor = conn.execute(
+        "INSERT INTO judge_runs (experiment_id, source_db, judge_model, created_at) "
+        "VALUES (?, ?, ?, ?)",
+        (experiment_id, str(source_db), judge_model, datetime.now().isoformat()),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def insert_analysis(conn, run_id, result):
+    """Insert one judge_analyses row from a result dict."""
+    conn.execute(
+        "INSERT INTO judge_analyses "
+        "(run_id, question_id, category, question_prompt, models_included, "
+        " models_skipped, judge_response, elapsed_seconds, success, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            run_id,
+            result["question_id"],
+            result["category"],
+            result["question_prompt"],
+            result["models_included"],
+            json.dumps(result["models_skipped"]),
+            result["judge_response"],
+            result["elapsed_seconds"],
+            int(result["success"]),
+            datetime.now().isoformat(),
+        ),
+    )
+    conn.commit()
+
+
+# ── Response loading ──────────────────────────────────────────────────────────
 
 def find_latest_db(results_dir):
     """Return the most recently modified run_*.db in results_dir, or None."""
@@ -90,6 +162,8 @@ def load_responses(db_path, question_filter=None):
     return questions
 
 
+# ── Judge logic ───────────────────────────────────────────────────────────────
+
 def build_judge_prompt(q_data):
     """Build the judge prompt for one question. Returns (prompt_str, skipped_list)."""
     responses_text = ""
@@ -99,7 +173,9 @@ def build_judge_prompt(q_data):
         if not r["success"] or not (r["content"] or "").strip():
             skipped.append(r["model_name"])
             continue
-        responses_text += f"\n[{r['model_name']}] ({r['elapsed_s']:.1f}s)\n{r['content'].strip()}\n"
+        responses_text += (
+            f"\n[{r['model_name']}] ({r['elapsed_s']:.1f}s)\n{r['content'].strip()}\n"
+        )
 
     prompt = JUDGE_PROMPT_TEMPLATE.format(
         category=q_data["category"],
@@ -126,6 +202,33 @@ def initialize_judge(model_name):
         sys.exit(1)
 
 
+def analyze_question(judge, q_id, q_data):
+    """Run judge on one question. Returns a result dict."""
+    n_total = len(q_data["responses"])
+    print(f"[{q_id}] Sending {n_total} responses to judge...")
+
+    prompt, skipped = build_judge_prompt(q_data)
+    result = judge.chat(prompt, timeout=300)
+
+    if result.success:
+        print(f"  ✓ Done ({result.elapsed_s:.1f}s)")
+    else:
+        print(f"  ✗ Failed: {result.error}")
+
+    return {
+        "question_id": q_id,
+        "category": q_data["category"],
+        "question_prompt": q_data["prompt"],
+        "models_included": n_total - len(skipped),
+        "models_skipped": skipped,
+        "judge_response": result.content if result.success else None,
+        "elapsed_seconds": result.elapsed_s,
+        "success": result.success,
+    }
+
+
+# ── Output formatting ─────────────────────────────────────────────────────────
+
 def build_header(experiment, judge_model, db_path, questions):
     """Return the markdown header lines for the analysis file."""
     return [
@@ -138,37 +241,30 @@ def build_header(experiment, judge_model, db_path, questions):
     ]
 
 
-def analyze_question(judge, q_id, q_data):
-    """Run judge on one question. Returns list of markdown section lines."""
-    n_total = len(q_data["responses"])
-    print(f"[{q_id}] Sending {n_total} responses to judge...")
-
-    prompt, skipped = build_judge_prompt(q_data)
-    n_included = n_total - len(skipped)
-    result = judge.chat(prompt, timeout=300)
-
+def format_question_markdown(result, n_total):
+    """Convert a result dict to markdown section lines."""
     lines = [
-        f"## {q_id} — {q_data['category']}",
-        f"\n**Question:** {q_data['prompt']}  ",
-        f"**Models included:** {n_included}/{n_total}  ",
+        f"## {result['question_id']} — {result['category']}",
+        f"\n**Question:** {result['question_prompt']}  ",
+        f"**Models included:** {result['models_included']}/{n_total}  ",
     ]
-    if skipped:
-        lines.append(f"**Skipped (failed/empty):** {', '.join(skipped)}  ")
+    if result["models_skipped"]:
+        lines.append(f"**Skipped (failed/empty):** {', '.join(result['models_skipped'])}  ")
     lines.append("")
 
-    if result.success:
-        lines.append(result.content)
-        print(f"  ✓ Done ({result.elapsed_s:.1f}s)")
+    if result["success"]:
+        lines.append(result["judge_response"])
     else:
-        lines.append(f"_Judge query failed: {result.error}_")
-        print(f"  ✗ Failed: {result.error}")
+        lines.append("_Judge query failed._")
 
     lines.append("\n---\n")
     return lines
 
 
-def main():
-    """Parse args, load responses, run judge per question, write analysis file."""
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+def main():  # pylint: disable=too-many-locals
+    """Parse args, load responses, run judge per question, write outputs."""
     parser = argparse.ArgumentParser(description="Judge LLM responses from an experiment")
     parser.add_argument("--experiment", metavar="ID", required=True,
                         help="Experiment ID under experiments/")
@@ -185,13 +281,13 @@ def main():
         print(f"Error: experiments/{args.experiment}/ not found")
         sys.exit(1)
 
-    db_path = Path(args.db) if args.db else find_latest_db(exp_dir / "results")
-    if not db_path:
+    source_db = Path(args.db) if args.db else find_latest_db(exp_dir / "results")
+    if not source_db:
         print(f"Error: no run_*.db found in experiments/{args.experiment}/results/")
         sys.exit(1)
 
     print(f"Experiment: {args.experiment}")
-    print(f"Database:   {db_path}")
+    print(f"Database:   {source_db}")
     print(f"Judge:      {args.judge}")
 
     question_filter = None
@@ -201,7 +297,7 @@ def main():
     else:
         print("Questions:  all")
 
-    questions = load_responses(db_path, question_filter)
+    questions = load_responses(source_db, question_filter)
     if not questions:
         print("No matching responses found in database.")
         sys.exit(1)
@@ -213,14 +309,26 @@ def main():
     analysis_dir = exp_dir / "analysis"
     analysis_dir.mkdir(exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    out_path = analysis_dir / f"judge_{timestamp}.md"
+    md_path = analysis_dir / f"judge_{timestamp}.md"
+    db_path = analysis_dir / f"judge_{timestamp}.db"
 
-    sections = build_header(args.experiment, args.judge, db_path, questions)
+    # Set up SQLite
+    conn = init_judge_db(db_path)
+    run_id = insert_run(conn, args.experiment, source_db, args.judge)
+
+    # Run judge and collect results
+    sections = build_header(args.experiment, args.judge, source_db, questions)
     for q_id in sorted(questions.keys()):
-        sections.extend(analyze_question(judge, q_id, questions[q_id]))
+        q_data = questions[q_id]
+        result = analyze_question(judge, q_id, q_data)
+        insert_analysis(conn, run_id, result)
+        sections.extend(format_question_markdown(result, len(q_data["responses"])))
 
-    out_path.write_text("\n".join(sections), encoding="utf-8")
-    print(f"\nAnalysis saved to: {out_path}")
+    conn.close()
+
+    md_path.write_text("\n".join(sections), encoding="utf-8")
+    print(f"\nMarkdown : {md_path}")
+    print(f"SQLite   : {db_path}")
 
 
 if __name__ == "__main__":

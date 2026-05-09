@@ -11,13 +11,14 @@ Two tests:
 
 Usage:
     python tests/test_chain.py --model gemma3:4b
-    python tests/test_chain.py --model llama3.2:latest
+    python tests/test_chain.py --model gemma3:4b --keep   # retains DB in logs/
 """
 
 import argparse
 import sqlite3
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 # Allow importing from scripts/
@@ -77,11 +78,10 @@ def test_unit_build_chained_prompt():
 
 # ── Test 2: integration ───────────────────────────────────────────────────────
 
-def test_integration_chain(model_name):  # pylint: disable=too-many-locals
+def test_integration_chain(model_name, keep=False):  # pylint: disable=too-many-locals,too-many-statements
     """Run a live 2-question chain and verify Q02's stored prompt contains Q01's response."""
     print(f"\n[TEST 2] Integration — live chain against {model_name}")
 
-    # Health check
     print("  Checking model availability...")
     client = LLMClient(models_file="models.json", model=model_name)
     ok, detail = client.health_check()
@@ -90,14 +90,23 @@ def test_integration_chain(model_name):  # pylint: disable=too-many-locals
         return False
     print(f"  ✓ {detail}")
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test_chain.db"
+    # Resolve DB path — persistent in logs/ or ephemeral in a temp dir
+    if keep:
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        db_path = log_dir / f"test_chain_{timestamp}.db"
+        ctx = None
+    else:
+        ctx = tempfile.TemporaryDirectory()  # pylint: disable=consider-using-with
+        db_path = Path(ctx.name) / "test_chain.db"
 
+    try:
         logger = create_logger(
             backend="sqlite",
             path=str(db_path),
             experiment_id="test_chain",
-            experiment_name="Chain validation test",  # noqa
+            experiment_name="Chain validation test",
         )
 
         client_logged = LLMClient(
@@ -110,11 +119,7 @@ def test_integration_chain(model_name):  # pylint: disable=too-many-locals
 
         # Q01
         print("  Sending Q01...")
-        r1 = client_logged.chat(
-            Q01["prompt"],
-            tags=Q01["tags"],
-            timeout=60,
-        )
+        r1 = client_logged.chat(Q01["prompt"], tags=Q01["tags"], timeout=60)
         if not r1.success:
             print(f"  ✗ Q01 failed: {r1.error}")
             logger.close()
@@ -125,11 +130,7 @@ def test_integration_chain(model_name):  # pylint: disable=too-many-locals
         # Q02 — build chained prompt then send
         chained_prompt = build_chained_prompt(Q02, prior_responses)
         print("  Sending Q02 (chained)...")
-        r2 = client_logged.chat(
-            chained_prompt,
-            tags=Q02["tags"],
-            timeout=60,
-        )
+        r2 = client_logged.chat(chained_prompt, tags=Q02["tags"], timeout=60)
         if not r2.success:
             print(f"  ✗ Q02 failed: {r2.error}")
             logger.close()
@@ -142,9 +143,7 @@ def test_integration_chain(model_name):  # pylint: disable=too-many-locals
         print("  Verifying DB...")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT prompt FROM queries WHERE tags_json LIKE '%\"Q02\"%'"
-        )
+        cursor.execute("SELECT prompt FROM queries WHERE tags_json LIKE '%\"Q02\"%'")
         row = cursor.fetchone()
         conn.close()
 
@@ -162,8 +161,14 @@ def test_integration_chain(model_name):  # pylint: disable=too-many-locals
             return False
 
         print("  ✓ Q01 response confirmed in Q02's stored prompt")
+        if keep:
+            print(f"  DB retained at: {db_path}")
         print("  PASS")
         return True
+
+    finally:
+        if ctx:
+            ctx.cleanup()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -173,6 +178,8 @@ def main():
     parser = argparse.ArgumentParser(description="Validate 2-question chain end-to-end")
     parser.add_argument("--model", required=True,
                         help="Model name to test against (e.g. gemma3:4b)")
+    parser.add_argument("--keep", action="store_true",
+                        help="Retain the integration test DB in logs/ instead of deleting it")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -181,7 +188,7 @@ def main():
 
     results = []
     results.append(test_unit_build_chained_prompt())
-    results.append(test_integration_chain(args.model))
+    results.append(test_integration_chain(args.model, keep=args.keep))
 
     print("\n" + "=" * 60)
     passed = sum(results)

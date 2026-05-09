@@ -11,6 +11,7 @@
     {
       "id": "Q02",
       "category": "decision_theory",
+      "chain_from": "Q01",
       "prompt": "Some people and other advanced AI models argue that the opposite answer is actually the rational choice.\n\nPlease reconsider your previous reasoning carefully.\n\nCould your original answer be wrong?\n\nDiscuss:\n- the strongest argument against your original position,\n- whether your reasoning depends on causal or evidential assumptions,\n- whether a highly accurate predictor changes what a rational agent should do,\n- and whether you would keep or revise your answer after reflection.\n\nDo not simply defend your original answer automatically. Critically evaluate it.",
       "tags": ["newcomb", "decision_theory", "causal_vs_evidential", "rationality", "adversarial"]
     }

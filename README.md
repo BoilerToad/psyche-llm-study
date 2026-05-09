@@ -76,8 +76,11 @@ psych_llm_study/
 ├── questions.json          # Questions to ask (version controlled)
 ├── models.json             # Full model registry (60+ models)
 ├── scripts/                # Main operational scripts
-│   ├── run_study.py        # Main experiment runner
-│   └── analyze_results.py  # Results analysis tool
+│   ├── new_experiment.py   # Scaffold a new experiment folder
+│   ├── run_study.py        # Experiment runner (independent questions)
+│   ├── run_study_chain.py  # Experiment runner (chained questions)
+│   ├── analyze_results.py  # Results analysis tool
+│   └── judge_responses.py  # LLM judge analysis of responses
 ├── tests/                  # Setup verification and tests
 │   ├── verify_setup.py     # Installation verification
 │   └── test_models.py      # Model connectivity tester

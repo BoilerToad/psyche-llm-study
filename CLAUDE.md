@@ -97,7 +97,8 @@ psych_llm_study/
 │       └── analysis/judge_*.md
 ├── scripts/
 │   ├── new_experiment.py            # scaffold a new experiment
-│   ├── run_study.py                 # run an experiment
+│   ├── run_study.py                 # run an experiment (independent questions)
+│   ├── run_study_chain.py           # run an experiment (chained questions)
 │   ├── analyze_results.py           # basic SQL analysis of results
 │   └── judge_responses.py           # LLM judge analysis of responses
 └── tests/

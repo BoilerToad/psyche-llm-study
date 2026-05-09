@@ -1,0 +1,125 @@
+# Enhancements Backlog
+
+## ENH-001 — Multi-experiment folder structure
+
+**Status:** Proposed
+
+Restructure the project to support multiple named experiments, each fully self-contained and reproducible.
+
+### Folder layout
+
+```
+psych_llm_study/
+├── experiments/
+│   └── <experiment-id>/
+│       ├── experiment.json      # experiment definition (see schema below)
+│       ├── exp_questions.json   # frozen copy of questions used in this run
+│       ├── exp_models.json      # frozen subset of models used in this run
+│       └── results/
+│           └── run_TIMESTAMP.db
+├── models.json                  # global model registry (unchanged)
+├── questions.json               # global question bank (unchanged, used as source)
+├── scripts/
+│   ├── run_study.py             # gains --experiment <id>
+│   └── analyze_results.py       # gains --experiment <id>
+├── tests/
+└── logs/
+```
+
+### experiment.json schema
+
+```json
+{
+  "experiment_id": "moral-reasoning-pilot",
+  "name": "Moral Reasoning Pilot Study",
+  "description": "...",
+  "version": "1.0",
+  "created_at": "2026-05-09",
+  "author": "toddfirsich",
+  "questions_file": "exp_questions.json",
+  "models_file": "exp_models.json",
+  "run_config": {
+    "timeout": 240,
+    "temperature": 0.7
+  }
+}
+```
+
+### Key decisions
+
+- `exp_questions.json` and `exp_models.json` are frozen copies made at experiment creation time — editing the globals afterward does not affect a completed experiment
+- `exp_models.json` is a subset of the global `models.json` (same schema, fewer entries)
+- `models.json` remains the single source of truth for backend/capability metadata
+- `run_study.py` resolves all paths relative to the experiment folder
+- Results go into `experiments/<id>/results/` not the top-level `results/`
+
+### Scripts changes required
+
+- `run_study.py` — add `--experiment <id>` flag; load paths from `experiment.json`
+- `analyze_results.py` — add `--experiment <id>` flag; scope queries to that experiment's results folder
+- New helper (optional): `scripts/new_experiment.py` — scaffolds a new experiment folder, copies and filters globals into `exp_*` files
+
+---
+
+## ENH-002 — LLM judge for response analysis
+
+**Status:** Implemented — `scripts/judge_responses.py`
+
+A new script `scripts/judge_responses.py` that reads collected model responses from an experiment's SQLite database, feeds them to a judge LLM, and produces a written analysis (summary, cross-model comparisons, notable findings).
+
+### Usage
+
+```bash
+# Analyze all responses in an experiment (latest run)
+python scripts/judge_responses.py --experiment pilot-2026-05
+
+# Filter to specific questions
+python scripts/judge_responses.py --experiment pilot-2026-05 --questions Q01,Q03
+
+# Override the judge model
+python scripts/judge_responses.py --experiment pilot-2026-05 --judge grok-3
+
+# Analyze a specific run db
+python scripts/judge_responses.py --experiment pilot-2026-05 --db results/run_2026-05-09_14-30.db
+```
+
+### Default judge model
+
+`mistral-large-3:675b-cloud` (already designated as the judge model in models.json notes)
+
+### Behavior
+
+- Loads responses from the experiment's latest `run_*.db` (or `--db` override)
+- Groups responses by question ID
+- For each question (or filtered subset), builds a prompt containing all model responses and sends to the judge LLM
+- Judge produces: summary of response patterns, notable agreements/disagreements, outliers, quality observations
+- Output written to `experiments/<id>/analysis/judge_TIMESTAMP.md`
+
+### Prompt structure (per question)
+
+```
+You are analyzing responses from multiple LLMs to the following psychology question:
+
+QUESTION: {prompt}
+
+RESPONSES:
+[Model: grok-3]
+{content}
+
+[Model: gemma4:31b-cloud]
+{content}
+...
+
+Provide:
+1. A summary of the main themes across responses
+2. Notable differences or outliers between models
+3. Any surprising or particularly insightful responses
+4. Overall quality assessment
+```
+
+### Key decisions
+
+- One judge call per question (not one giant prompt for all questions — avoids context overload)
+- Think blocks from the original responses are excluded from the judge prompt (content only)
+- Analysis files saved to `experiments/<id>/analysis/` alongside results
+- Failed/empty responses are noted but not sent to judge

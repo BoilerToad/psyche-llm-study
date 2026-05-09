@@ -26,9 +26,8 @@ def check_python_version():
     if version.major == 3 and version.minor >= 13:
         print(f"  ✓ Python {version.major}.{version.minor}.{version.micro}")
         return True
-    else:
-        print(f"  ✗ Python {version.major}.{version.minor}.{version.micro} (requires 3.13+)")
-        return False
+    print(f"  ✗ Python {version.major}.{version.minor}.{version.micro} (requires 3.13+)")
+    return False
 
 
 def check_llm_client():
@@ -72,7 +71,7 @@ def check_model_registry():
     print("\nChecking model registry...")
 
     try:
-        with open("models.json", "r") as f:
+        with open("models.json", "r", encoding="utf-8") as f:
             registry = json.load(f)
 
         models = registry.get("models", [])
@@ -101,7 +100,7 @@ def check_model_registry():
     except json.JSONDecodeError:
         print("  ✗ Invalid JSON in models.json")
         return False
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"  ✗ Error reading models.json: {e}")
         return False
 
@@ -117,10 +116,9 @@ def check_virtual_env():
     if in_venv:
         print(f"  ✓ Running in virtual environment: {sys.prefix}")
         return True
-    else:
-        print("  ⚠️  Not running in a virtual environment")
-        print("  Recommended: source .venv/bin/activate")
-        return False
+    print("  ⚠️  Not running in a virtual environment")
+    print("  Recommended: source .venv/bin/activate")
+    return False
 
 
 def main():
@@ -146,17 +144,18 @@ def main():
         print("\nNext steps:")
         print("  1. Edit questions.json with your research questions")
         print("  2. Edit models.json with your target models")
-        print("  3. Run: python run_study.py")
+        print("  3. Create an experiment:")
+        print("       python scripts/new_experiment.py --id <id> --name '<name>'")
+        print("  4. Run: python scripts/run_study.py --experiment <id>")
         print("\nSee QUICKSTART.md for detailed usage instructions.")
         return 0
-    else:
-        print("✗ Some checks failed. Please fix the issues above.")
-        print("="*70)
-        print("\nFor help, see:")
-        print("  - INSTALL.md for installation instructions")
-        print("  - QUICKSTART.md for usage guide")
-        print("  - README.md for project overview")
-        return 1
+    print("✗ Some checks failed. Please fix the issues above.")
+    print("="*70)
+    print("\nFor help, see:")
+    print("  - INSTALL.md for installation instructions")
+    print("  - QUICKSTART.md for usage guide")
+    print("  - README.md for project overview")
+    return 1
 
 
 if __name__ == "__main__":

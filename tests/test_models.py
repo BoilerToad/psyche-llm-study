@@ -90,7 +90,7 @@ def test_model_connectivity(model_name: str, models_file: str, log_file) -> dict
         # Try a simple test query
         try:
             log_file.write("Test Query: 'What is 2+2?'\n")
-            test_result = client.chat("What is 2+2?", timeout=10)
+            test_result = client.chat("What is 2+2?", timeout=240)
             result["test_query_success"] = test_result.success
 
             log_file.write(f"Query Success: {test_result.success}\n")
@@ -103,11 +103,11 @@ def test_model_connectivity(model_name: str, models_file: str, log_file) -> dict
             if not test_result.success:
                 result["error"] = test_result.error
                 log_file.write(f"Query Error: {test_result.error}\n")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             result["error"] = f"Query failed: {str(e)}"
             log_file.write(f"Query Exception: {str(e)}\n")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         result["error"] = str(e)
         log_file.write(f"\nCONNECTION ERROR: {str(e)}\n")
 
@@ -229,7 +229,7 @@ def print_summary(results: list, registry: dict):  # pylint: disable=too-many-br
     print("\n" + "="*80)
 
 
-def main():
+def main():  # pylint: disable=too-many-locals
     """Run model connectivity tests."""
 
     # Parse command-line arguments
@@ -273,7 +273,7 @@ def main():
     model_names = [m["name"] for m in enabled_models]
 
     if not model_names:
-        print(f"❌ Error: No models match the filter criteria")
+        print("❌ Error: No models match the filter criteria")
         return 1
 
     print(f"Total models in registry: {len(all_models)}")
@@ -294,7 +294,7 @@ def main():
 
     results = []
     with open(log_path, "w", encoding="utf-8") as log_file:
-        log_file.write(f"Model Connectivity Test\n")
+        log_file.write("Model Connectivity Test\n")
         log_file.write(f"Started: {datetime.now().isoformat()}\n")
         log_file.write(f"Testing {len(model_names)} models\n")
 
@@ -303,11 +303,11 @@ def main():
             result = test_model_connectivity(model_name, models_file, log_file)
             results.append(result)
 
-        if result["available"]:
-            status = "✓" if result["test_query_success"] else "⚠️"
-            print(f"  {status} {result['health_detail']}")
-        else:
-            print(f"  ✗ {result['error']}")
+            if result["available"]:
+                status = "✓" if result["test_query_success"] else "⚠️"
+                print(f"  {status} {result['health_detail']}")
+            else:
+                print(f"  ✗ {result['error']}")
 
     print(f"\n📝 Full test log saved to: {log_path}")
 

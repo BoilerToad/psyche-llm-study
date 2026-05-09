@@ -2,12 +2,16 @@
 """
 analyze_results.py
 ──────────────────
-Example analysis script showing how to query and analyze study results.
+Analysis script for study results.
 
 Usage:
-    python analyze_results.py results/study_2026-05-09_14-30-15.db
+    python scripts/analyze_results.py --experiment <id>          # latest run in that experiment
+    python scripts/analyze_results.py --experiment <id> <db>     # specific run
+    python scripts/analyze_results.py <db>                        # specific db by path
+    python scripts/analyze_results.py                             # latest in results/
 """
 
+import argparse
 import json
 import sqlite3
 import sys
@@ -142,21 +146,52 @@ def analyze_study(db_path: str):  # pylint: disable=too-many-locals,too-many-sta
     print(f"{'='*70}\n")
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        # Find most recent database in results/
-        results_dir = Path("results")
-        if results_dir.exists():
-            db_files = list(results_dir.glob("study_*.db"))
-            if db_files:
-                latest_db = max(db_files, key=lambda p: p.stat().st_mtime)
-                print(f"Using most recent database: {latest_db}\n")
-                analyze_study(str(latest_db))
-            else:
-                print("No database files found in results/")
-                print(f"Usage: python {sys.argv[0]} <path_to_database.db>")
+def find_latest_db(results_dir: Path) -> Path | None:
+    """Return the most recently modified run_*.db in results_dir, or None."""
+    db_files = list(results_dir.glob("run_*.db"))
+    if not db_files:
+        return None
+    return max(db_files, key=lambda p: p.stat().st_mtime)
+
+
+def main():
+    """Entry point — resolve DB path and run analysis."""
+    parser = argparse.ArgumentParser(description="Analyze study results")
+    parser.add_argument("--experiment", metavar="ID", help="Experiment ID under experiments/")
+    parser.add_argument("db", nargs="?", help="Path to specific .db file (optional)")
+    args = parser.parse_args()
+
+    if args.db:
+        analyze_study(args.db)
+        return
+
+    if args.experiment:
+        results_dir = Path("experiments") / args.experiment / "results"
+        if not results_dir.exists():
+            print(f"Error: experiments/{args.experiment}/results/ not found")
+            sys.exit(1)
+        db_path = find_latest_db(results_dir)
+        if not db_path:
+            print(f"No run_*.db files found in experiments/{args.experiment}/results/")
+            sys.exit(1)
+        print(f"Using most recent run: {db_path}\n")
+        analyze_study(str(db_path))
+        return
+
+    # Legacy fallback — look in top-level results/
+    results_dir = Path("results")
+    if results_dir.exists():
+        db_path = find_latest_db(results_dir)
+        if db_path:
+            print(f"Using most recent database: {db_path}\n")
+            analyze_study(str(db_path))
         else:
-            print("No results directory found")
-            print(f"Usage: python {sys.argv[0]} <path_to_database.db>")
+            print("No database files found in results/")
+            print(f"Usage: python {sys.argv[0]} --experiment <id>")
     else:
-        analyze_study(sys.argv[1])
+        print("No results directory found")
+        print(f"Usage: python {sys.argv[0]} --experiment <id>")
+
+
+if __name__ == "__main__":
+    main()

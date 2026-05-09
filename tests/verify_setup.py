@@ -8,7 +8,7 @@ Run this after installation to check:
 - Python version
 - llm_client import
 - Configuration files
-- probe_models.json path
+- Model registry (models.json)
 
 Usage:
     python verify_setup.py
@@ -35,7 +35,7 @@ def check_llm_client():
     """Check if llm_client can be imported."""
     print("\nChecking llm_client package...")
     try:
-        from llm_client import LLMClient, create_logger
+        import llm_client  # pylint: disable=import-outside-toplevel,unused-import
         print("  ✓ llm_client imported successfully")
         return True
     except ImportError as e:
@@ -47,15 +47,15 @@ def check_llm_client():
 def check_config_files():
     """Check if configuration files exist."""
     print("\nChecking configuration files...")
-    
+
     all_ok = True
-    
+
     files = {
         "questions.json": "Questions configuration",
         "models.json": "Models configuration",
         "pyproject.toml": "Project configuration",
     }
-    
+
     for filename, description in files.items():
         path = Path(filename)
         if path.exists():
@@ -63,43 +63,44 @@ def check_config_files():
         else:
             print(f"  ✗ {filename} missing ({description})")
             all_ok = False
-    
+
     return all_ok
 
 
-def check_probe_models():
-    """Check if probe_models.json path is valid."""
-    print("\nChecking probe_models.json...")
-    
+def check_model_registry():
+    """Check if models.json contains valid model entries."""
+    print("\nChecking model registry...")
+
     try:
         with open("models.json", "r") as f:
-            config = json.load(f)
-        
-        probe_path = config.get("probe_models_path")
-        if not probe_path:
-            print("  ⚠️  No probe_models_path specified in models.json")
-            print("  You'll need to set this before running studies")
+            registry = json.load(f)
+
+        models = registry.get("models", [])
+        if not models:
+            print("  ✗ No models found in models.json")
             return False
-        
-        probe_file = Path(probe_path)
-        if probe_file.exists():
-            print(f"  ✓ Found at: {probe_path}")
-            
-            # Check if it's valid JSON
-            try:
-                with open(probe_file, "r") as f:
-                    data = json.load(f)
-                models_count = len(data.get("models", []))
-                print(f"  ✓ Contains {models_count} model(s)")
-                return True
-            except json.JSONDecodeError:
-                print(f"  ✗ Invalid JSON in {probe_path}")
+
+        enabled_count = len([m for m in models if m.get("enabled", True)])
+        print(f"  ✓ Contains {len(models)} model(s)")
+        print(f"  ✓ {enabled_count} enabled model(s)")
+
+        # Check for required fields in first model
+        if models:
+            first_model = models[0]
+            required_fields = ["name", "backend"]
+            missing = [f for f in required_fields if f not in first_model]
+            if missing:
+                print(f"  ⚠️  Model entries missing fields: {missing}")
                 return False
-        else:
-            print(f"  ✗ Not found at: {probe_path}")
-            print("  Update probe_models_path in models.json")
-            return False
-            
+
+        return True
+
+    except FileNotFoundError:
+        print("  ✗ models.json not found")
+        return False
+    except json.JSONDecodeError:
+        print("  ✗ Invalid JSON in models.json")
+        return False
     except Exception as e:
         print(f"  ✗ Error reading models.json: {e}")
         return False
@@ -108,11 +109,11 @@ def check_probe_models():
 def check_virtual_env():
     """Check if running in a virtual environment."""
     print("\nChecking virtual environment...")
-    
+
     in_venv = hasattr(sys, 'real_prefix') or (
         hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix
     )
-    
+
     if in_venv:
         print(f"  ✓ Running in virtual environment: {sys.prefix}")
         return True
@@ -128,17 +129,17 @@ def main():
     print("Psychology LLM Study - Setup Verification")
     print("="*70)
     print()
-    
+
     checks = [
         check_python_version(),
         check_llm_client(),
         check_config_files(),
-        check_probe_models(),
+        check_model_registry(),
         check_virtual_env(),
     ]
-    
+
     print("\n" + "="*70)
-    
+
     if all(checks):
         print("✓ All checks passed! Setup is complete.")
         print("="*70)

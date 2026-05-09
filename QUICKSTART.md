@@ -29,6 +29,16 @@ Check your questions:
 cat questions.json
 ```
 
+**Test model connectivity (recommended):**
+```bash
+python tests/test_models.py                    # test all models
+python tests/test_models.py --backend ollama   # test only local models
+python tests/test_models.py --backend xai      # test only xAI models
+python tests/test_models.py --family llama     # test only llama models
+```
+
+This will test each model and provide a detailed summary of availability, backend status, and troubleshooting recommendations. Use `--backend` or `--family` filters to test specific subsets.
+
 ### 2. Run the study
 
 ```bash

@@ -14,18 +14,18 @@ import sys
 from pathlib import Path
 
 
-def analyze_study(db_path: str):
+def analyze_study(db_path: str):  # pylint: disable=too-many-locals,too-many-statements
     """Perform basic analysis on study results."""
-    
+
     if not Path(db_path).exists():
         print(f"Error: Database not found: {db_path}")
         sys.exit(1)
-    
+
     print(f"Analyzing: {db_path}\n")
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     # Study metadata
     print("="*70)
     print("STUDY METADATA")
@@ -40,23 +40,23 @@ def analyze_study(db_path: str):
         if metadata:
             meta = json.loads(metadata)
             print(f"Metadata: {json.dumps(meta, indent=2)}")
-    
+
     # Query counts by model
     print(f"\n{'='*70}")
     print("QUERIES BY MODEL")
     print("="*70)
     cursor.execute("""
-        SELECT model_name, 
+        SELECT model_name,
                COUNT(*) as total,
                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
                SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed
-        FROM queries 
+        FROM queries
         GROUP BY model_name
     """)
     for row in cursor.fetchall():
         model, total, successful, failed = row
         print(f"{model}: {successful}/{total} successful ({failed} failed)")
-    
+
     # Think block analysis
     print(f"\n{'='*70}")
     print("THINK BLOCK USAGE")
@@ -75,7 +75,7 @@ def analyze_study(db_path: str):
         print(f"{model}:")
         print(f"  Think blocks: {with_think}/{total} ({pct:.1f}%)")
         print(f"  Avg think length: {avg_length:.0f} chars")
-    
+
     # Response time analysis
     print(f"\n{'='*70}")
     print("RESPONSE TIME ANALYSIS")
@@ -94,7 +94,7 @@ def analyze_study(db_path: str):
         print(f"{model}:")
         print(f"  Average: {avg_time:.2f}s")
         print(f"  Range: {min_time:.2f}s - {max_time:.2f}s")
-    
+
     # Response length analysis
     print(f"\n{'='*70}")
     print("RESPONSE LENGTH ANALYSIS")
@@ -113,7 +113,7 @@ def analyze_study(db_path: str):
         print(f"{model}:")
         print(f"  Average: {avg_len:.0f} chars")
         print(f"  Range: {min_len} - {max_len} chars")
-    
+
     # Questions answered
     print(f"\n{'='*70}")
     print("QUESTIONS")
@@ -132,11 +132,11 @@ def analyze_study(db_path: str):
         if q_id:
             question_ids.add(q_id)
             print(f"{q_id}: answered by {count} model(s)")
-    
+
     print(f"\nTotal questions: {len(question_ids)}")
-    
+
     conn.close()
-    
+
     print(f"\n{'='*70}")
     print("Analysis complete!")
     print(f"{'='*70}\n")

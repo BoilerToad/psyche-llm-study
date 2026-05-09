@@ -25,6 +25,42 @@ python tests/verify_setup.py
 - When troubleshooting installation issues
 - Before running studies (optional)
 
+### `test_models.py`
+Model connectivity test that verifies **ALL models in `models.json`** (30+ models) are accessible and responsive.
+
+**Usage:**
+```bash
+python tests/test_models.py                    # test all enabled models
+python tests/test_models.py --backend ollama   # test only local ollama models
+python tests/test_models.py --backend ollama_cloud  # test only ollama cloud models
+python tests/test_models.py --backend llamacpp # test only llamacpp models
+python tests/test_models.py --backend xai      # test only xAI models
+python tests/test_models.py --family llama     # test only llama family models
+python tests/test_models.py --family grok      # test only grok models
+```
+
+**Filtering options:**
+- `--backend`: Filter by backend type (ollama, ollama_cloud, llamacpp, xai, openai)
+- `--family`: Filter by model family (llama, grok, gemma, mistral, qwen, etc.)
+
+**What it tests:**
+- Model availability (health check)
+- Backend connectivity (ollama, ollama_cloud, xai, llamacpp)
+- Response time for each model
+- Test query execution (simple "2+2" question)
+
+**What it reports:**
+- Detailed per-model status and metadata
+- Backend summary (available/responsive counts)
+- Model metadata from models.json (family, size, origin, think_blocks)
+- Troubleshooting recommendations for failed models
+
+**When to run:**
+- Before starting a new study
+- After updating models.json
+- When troubleshooting model connectivity
+- To verify API keys and local servers are working
+
 ## Adding Tests
 
 As the project grows, you may want to add:

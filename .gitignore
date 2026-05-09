@@ -27,9 +27,10 @@ Thumbs.db
 
 # Results and logs
 results/
+logs/
 *.db
 *.jsonl
-logs/
+*.log
 
 # Environment
 .env

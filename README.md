@@ -47,13 +47,24 @@ source .venv/bin/activate
 
 ## Quick Start
 
-1. **Configure your questions** in `questions.json`
-2. **Configure your models** in `models.json`
-3. **Run the study:**
+1. **Verify installation:**
+   ```bash
+   source .venv/bin/activate
+   python tests/verify_setup.py
+   ```
 
-```bash
-python scripts/run_study.py
-```
+2. **Test model connectivity:**
+   ```bash
+   python tests/test_models.py              # Test all models
+   python tests/test_models.py --backend ollama  # Test local models only
+   ```
+
+3. **Configure your questions** in `questions.json`
+
+4. **Run the study:**
+   ```bash
+   python scripts/run_study.py
+   ```
 
 Results are saved to `results/study_TIMESTAMP.db` with full SQLite logging.
 
@@ -63,15 +74,17 @@ Results are saved to `results/study_TIMESTAMP.db` with full SQLite logging.
 psych_llm_study/
 ├── pyproject.toml          # Project configuration
 ├── questions.json          # Questions to ask (version controlled)
-├── models.json             # Models to test (version controlled)
+├── models.json             # Full model registry (60+ models)
 ├── scripts/                # Main operational scripts
 │   ├── run_study.py        # Main experiment runner
 │   └── analyze_results.py  # Results analysis tool
 ├── tests/                  # Setup verification and tests
-│   └── verify_setup.py     # Installation verification
+│   ├── verify_setup.py     # Installation verification
+│   └── test_models.py      # Model connectivity tester
+├── logs/                   # Test logs with raw API responses
+├── results/                # SQLite databases (not in git)
 ├── README.md               # This file
-├── .gitignore              # Excludes results/ from git
-└── results/                # SQLite databases (not in git)
+└── .gitignore              # Excludes results/ and logs/
 ```
 
 ## questions.json Format
@@ -99,17 +112,36 @@ psych_llm_study/
 
 ## models.json Format
 
+`models.json` contains the **full model registry** (60+ models) with complete metadata:
+
 ```json
 {
+  "_meta": {
+    "version": "1.0",
+    "description": "Model registry - single source of truth for all LLM backends"
+  },
   "models": [
-    "grok-4.20-0309-reasoning",
-    "deepseek-v4-pro:cloud",
-    "qwen3:14b"
+    {
+      "name": "grok-4.20-0309-reasoning",
+      "backend": "xai",
+      "family": "grok",
+      "think_blocks": true,
+      "geopolitical_origin": "US/xAI",
+      "enabled": true
+    },
+    {
+      "name": "gemma4:31b-cloud",
+      "backend": "ollama_cloud",
+      "family": "gemma4",
+      "size_gb": 18,
+      "geopolitical_origin": "US/Google",
+      "enabled": true
+    }
   ]
 }
 ```
 
-Models must exist in your `probe_models.json` file (referenced by llm-client).
+All models in the registry are available. Use `enabled: false` to skip models without deleting them.
 
 ## Output
 
@@ -158,14 +190,41 @@ For each question × model combination:
 - **Tags**: Question ID, category, and custom tags
 - **Metadata**: Model name, backend, timestamp
 
+## Testing Model Connectivity
+
+Before running a study, test which models are accessible:
+
+```bash
+# Test all enabled models (60+)
+python tests/test_models.py
+
+# Filter by backend
+python tests/test_models.py --backend ollama       # Local ollama models
+python tests/test_models.py --backend ollama_cloud # Ollama cloud models
+python tests/test_models.py --backend xai          # xAI (Grok)
+python tests/test_models.py --backend llamacpp     # llama.cpp server
+
+# Filter by model family
+python tests/test_models.py --family llama         # All llama models
+python tests/test_models.py --family grok          # All grok models
+python tests/test_models.py --family deepseek      # All deepseek models
+```
+
+**Features:**
+- Tests health check and simple query for each model
+- Logs raw API responses to `logs/model_test_TIMESTAMP.log`
+- Provides detailed summary with troubleshooting recommendations
+- Shows token counts, timing, and think block support
+
 ## Reproducibility
 
 To reproduce a study:
 
 1. Clone this repository
-2. Install dependencies: `pip install -e .`
-3. Ensure your `probe_models.json` has the required models
-4. Run: `python run_study.py`
+2. Run: `./setup.sh` (auto-installs llm-client)
+3. Activate environment: `source .venv/bin/activate`
+4. Test models: `python tests/test_models.py`
+5. Run: `python scripts/run_study.py`
 
 All questions and model configurations are version controlled, so others can replicate your exact experimental setup.
 
@@ -196,15 +255,48 @@ This framework is designed to be reusable. To adapt for your research:
 3. Optionally extend scripts in `scripts/` for custom analysis
 4. Share your `questions.json` for reproducibility
 
+## API Keys
+
+Set required API keys in `~/.env`:
+
+```bash
+# For xAI models (Grok)
+XAI_API_KEY=your_xai_api_key
+
+# For Ollama cloud models
+OLLAMA_API_KEY=your_ollama_api_key
+```
+
+Local models (ollama, llamacpp) don't require API keys.
+
+## Logs and Debugging
+
+All test runs create detailed logs in `logs/`:
+- Raw API responses in JSON format
+- Token counts and timing data
+- Error messages and stack traces
+- Think blocks for reasoning models
+
+Use these logs to:
+- Debug API connection issues
+- Understand model behavior
+- Verify response formats
+- Track token usage
+
 ## Project Structure
 
 ```
 psych_llm_study/
 ├── scripts/                # Operational scripts (run studies, analyze results)
-├── tests/                  # Verification and tests
+│   ├── run_study.py        # Main experiment runner
+│   └── analyze_results.py  # Results analysis
+├── tests/                  # Verification and testing tools
+│   ├── verify_setup.py     # Installation verification
+│   └── test_models.py      # Model connectivity tester
 ├── results/                # SQLite databases (gitignored)
+├── logs/                   # Test logs with raw responses (gitignored)
 ├── questions.json          # Study questions (version controlled)
-├── models.json             # Model configurations (version controlled)
+├── models.json             # Full model registry (version controlled)
 ├── setup.sh                # Automated installation script
 └── [docs and configs]
 ```

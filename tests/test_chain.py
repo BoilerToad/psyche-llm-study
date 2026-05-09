@@ -82,14 +82,6 @@ def test_integration_chain(model_name, keep=False):  # pylint: disable=too-many-
     """Run a live 2-question chain and verify Q02's stored prompt contains Q01's response."""
     print(f"\n[TEST 2] Integration — live chain against {model_name}")
 
-    print("  Checking model availability...")
-    client = LLMClient(models_file="models.json", model=model_name)
-    ok, detail = client.health_check()
-    if not ok:
-        print(f"  ✗ Model unavailable: {detail}")
-        return False
-    print(f"  ✓ {detail}")
-
     # Resolve DB path — persistent in logs/ or ephemeral in a temp dir
     if keep:
         log_dir = Path("logs")
@@ -109,17 +101,21 @@ def test_integration_chain(model_name, keep=False):  # pylint: disable=too-many-
             experiment_name="Chain validation test",
         )
 
-        client_logged = LLMClient(
-            models_file="models.json",
-            model=model_name,
-            logger=logger,
-        )
+        client = LLMClient(models_file="models.json", model=model_name, logger=logger)
+
+        print("  Checking model availability...")
+        ok, detail = client.health_check()
+        if not ok:
+            print(f"  ✗ Model unavailable: {detail}")
+            logger.close()
+            return False
+        print(f"  ✓ {detail}")
 
         prior_responses = {}
 
         # Q01
         print("  Sending Q01...")
-        r1 = client_logged.chat(Q01["prompt"], tags=Q01["tags"], timeout=60)
+        r1 = client.chat(Q01["prompt"], tags=Q01["tags"], timeout=60)
         if not r1.success:
             print(f"  ✗ Q01 failed: {r1.error}")
             logger.close()
@@ -130,7 +126,7 @@ def test_integration_chain(model_name, keep=False):  # pylint: disable=too-many-
         # Q02 — build chained prompt then send
         chained_prompt = build_chained_prompt(Q02, prior_responses)
         print("  Sending Q02 (chained)...")
-        r2 = client_logged.chat(chained_prompt, tags=Q02["tags"], timeout=60)
+        r2 = client.chat(chained_prompt, tags=Q02["tags"], timeout=60)
         if not r2.success:
             print(f"  ✗ Q02 failed: {r2.error}")
             logger.close()

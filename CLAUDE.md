@@ -100,7 +100,8 @@ psych_llm_study/
 │   ├── run_study.py                 # run an experiment (independent questions)
 │   ├── run_study_chain.py           # run an experiment (chained questions)
 │   ├── analyze_results.py           # basic SQL analysis of results
-│   └── judge_responses.py           # LLM judge analysis of responses
+│   ├── judge_responses.py           # LLM judge analysis of responses
+│   └── classify_results.py          # LLM judge classification + tally per question
 └── tests/
     ├── verify_setup.py              # installation verification
     └── test_models.py               # model connectivity sweep

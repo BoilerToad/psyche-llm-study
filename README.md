@@ -81,7 +81,8 @@ psych_llm_study/
 │   ├── run_study_chain.py  # Experiment runner (chained questions)
 │   ├── analyze_results.py  # Results analysis tool
 │   ├── judge_responses.py  # LLM judge analysis of responses
-│   └── classify_results.py # LLM judge classification + tally per question
+│   ├── classify_results.py # LLM judge classification + tally per question
+│   └── summarize_label.py  # Summarize what a classification label (e.g. "Other") actually means
 ├── tests/                  # Setup verification and tests
 │   ├── verify_setup.py     # Installation verification
 │   └── test_models.py      # Model connectivity tester
